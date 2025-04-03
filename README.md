@@ -2,7 +2,7 @@
 
 A modern, interactive dashboard for tracking GitHub user statistics and activity. Compare metrics across multiple developers and gain insights into public and private contribution activity.
 
-![GitHub Dashboard Preview](https://via.placeholder.com/800x450?text=GitHub+Dashboard+Preview)
+![GitHub Dashboard Preview](./assets/images/dashboard-preview.png)
 
 ## Features
 
