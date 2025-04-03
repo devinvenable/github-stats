@@ -1,5 +1,5 @@
 // src/Dashboard.jsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Box,
   AppBar,
@@ -26,6 +26,7 @@ import GitHubChart from "./components/GitHubChart";
 import RepoDataGrid from "./components/RepoDataGrid";
 import AggregatedDashboard from "./components/AggregatedDashboard";
 import TokenInput from "./components/TokenInput";
+import DateRangePicker from "./components/DateRangePicker";
 
 // Import API services
 import {
@@ -42,6 +43,10 @@ import {
   fetchMultipleUsersData,
   calculateAggregatedStats,
 } from "./api/aggregatedStats";
+import {
+  filterCommitHistoryByDateRange,
+  filterLanguageDataByDateRange
+} from "./api/dateFilterHelpers";
 
 const Dashboard = () => {
   const theme = useTheme();
@@ -66,6 +71,12 @@ const Dashboard = () => {
   // Contribution stats with private activity (if authenticated)
   const [contributionStats, setContributionStats] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  
+  // Date range filter state
+  const [dateRange, setDateRange] = useState({
+    start: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000), // Last 90 days
+    end: new Date()
+  });
 
   // Initialize authentication when the component mounts
   useEffect(() => {
@@ -323,26 +334,45 @@ const Dashboard = () => {
     }
   };
 
+  // Filter data based on selected date range
+  const filteredCommitHistory = useMemo(() => {
+    return filterCommitHistoryByDateRange(
+      commitHistory,
+      dateRange.start,
+      dateRange.end
+    );
+  }, [commitHistory, dateRange]);
+  
+  const filteredLanguageData = useMemo(() => {
+    return filterLanguageDataByDateRange(
+      repositories,
+      dateRange.start,
+      dateRange.end
+    );
+  }, [repositories, dateRange]);
+  
   // Prepare chart data for commit history
   const commitChartData = {
-    labels: commitHistory.labels,
+    labels: filteredCommitHistory.labels || [],
     datasets: [
       {
         label: "Commits",
-        data: commitHistory.data,
+        data: filteredCommitHistory.data || [],
         borderColor: theme.palette.primary.main,
-        backgroundColor: theme.palette.primary.light,
+        backgroundColor: `${theme.palette.primary.main}33`,
+        borderWidth: 2,
+        fill: true,
+        tension: 0.1,
       },
     ],
   };
 
-  // Prepare language distribution chart data
   const languageChartData = {
-    labels: repoStats?.topLanguages?.map((lang) => lang.language) || [],
+    labels: filteredLanguageData.labels || [],
     datasets: [
       {
         label: "Repository Count",
-        data: repoStats?.topLanguages?.map((lang) => lang.count) || [],
+        data: filteredLanguageData.data || [],
         backgroundColor: [
           "#4e79a7",
           "#f28e2c",
@@ -376,7 +406,7 @@ const Dashboard = () => {
         display: 'flex',
         flexDirection: 'column'
       }}>
-        <Container maxWidth="xl">
+        <Container maxWidth="xl" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
           <Box sx={{ mb: 3 }}>
             <UsernameInput
               onSearch={handleSearch}
@@ -414,39 +444,41 @@ const Dashboard = () => {
 
             {/* Individual User Profile and Stats */}
             {userData && !loading && !isAggregated && (
-              <>
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                width: '100%', 
+                maxWidth: '1200px'
+              }}>
                 {/* Profile Summary */}
-                <Grid container spacing={3} sx={{ mt: 1 }}>
-                  <Grid xs={12} lg={3}>
-                    <Box sx={{ textAlign: "center", mb: 2 }}>
-                      <img
-                        src={userData.avatar_url}
-                        alt={userData.login}
-                        style={{
-                          width: "150px",
-                          height: "150px",
-                          borderRadius: "50%",
-                          border: `3px solid ${theme.palette.primary.main}`,
-                        }}
-                      />
-                      <Typography variant="h5" sx={{ mt: 2 }}>
-                        {userData.name || userData.login}
-                      </Typography>
-                      <Typography variant="body1" color="text.secondary">
-                        @{userData.login}
-                      </Typography>
-                      {userData.bio && (
-                        <Typography variant="body2" sx={{ mt: 1 }}>
-                          {userData.bio}
-                        </Typography>
-                      )}
-                    </Box>
-                  </Grid>
-
-                  {/* Stat Cards */}
-                  <Grid xs={12} lg={9}>
-                    <Grid container spacing={2}>
-                      <Grid xs={12} sm={6} lg={4}>
+                <Box sx={{ textAlign: 'center', mb: 4, maxWidth: '800px' }}>
+                  <img 
+                    src={userData.avatar_url} 
+                    alt={userData.login}
+                    style={{ 
+                      width: '150px', 
+                      height: '150px', 
+                      borderRadius: '50%',
+                      border: `3px solid ${theme.palette.primary.main}`
+                    }}/>
+                  <Typography variant="h5" sx={{ mt: 2 }}>
+                    {userData.name || userData.login}
+                  </Typography>
+                  <Typography variant="body1" color="text.secondary">
+                    @{userData.login}
+                  </Typography>
+                  {userData.bio && (
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      {userData.bio}
+                    </Typography>
+                  )}
+                </Box>
+                
+                {/* Stat Cards */}
+                <Box sx={{ width: '100%', maxWidth: '1000px', mb: 4 }}>
+                  <Grid container spacing={2} justifyContent="center">
+                      <Grid item xs={12} sm={6} lg={4}>
                         <StatCard
                           title="Repositories"
                           value={userData.public_repos}
@@ -454,7 +486,7 @@ const Dashboard = () => {
                           color={theme.palette.primary.main}
                         />
                       </Grid>
-                      <Grid xs={12} sm={6} lg={4}>
+                      <Grid item xs={12} sm={6} lg={4}>
                         <StatCard
                           title="Followers"
                           value={userData.followers}
@@ -462,7 +494,7 @@ const Dashboard = () => {
                           color={theme.palette.secondary.main}
                         />
                       </Grid>
-                      <Grid xs={12} sm={6} lg={4}>
+                      <Grid item xs={12} sm={6} lg={4}>
                         <StatCard
                           title="Total Stars"
                           value={repoStats?.totalStars || 0}
@@ -471,7 +503,7 @@ const Dashboard = () => {
                         />
                       </Grid>
                       {contributionStats && (
-                        <Grid xs={12} sm={6} lg={4}>
+                        <Grid item xs={12} sm={6} lg={4}>
                           <StatCard
                             title="Total Contributions"
                             value={contributionStats.totalContributions}
@@ -481,7 +513,7 @@ const Dashboard = () => {
                           />
                         </Grid>
                       )}
-                      <Grid xs={12} sm={6} lg={4}>
+                      <Grid item xs={12} sm={6} lg={4}>
                         <StatCard
                           title="Following"
                           value={userData.following}
@@ -489,7 +521,7 @@ const Dashboard = () => {
                           color={theme.palette.info.main}
                         />
                       </Grid>
-                      <Grid xs={12} sm={6} lg={4}>
+                      <Grid item xs={12} sm={6} lg={4}>
                         <StatCard
                           title="Public Gists"
                           value={userData.public_gists}
@@ -497,7 +529,7 @@ const Dashboard = () => {
                           color={theme.palette.warning.main}
                         />
                       </Grid>
-                      <Grid xs={12} sm={6} lg={4}>
+                      <Grid item xs={12} sm={6} lg={4}>
                         <StatCard
                           title="Total Forks"
                           value={repoStats?.totalForks || 0}
@@ -505,36 +537,61 @@ const Dashboard = () => {
                           color={theme.palette.error.main}
                         />
                       </Grid>
+                  </Grid>
+                </Box>
+
+                {/* Date Range Picker */}
+                <Box sx={{ width: '100%', maxWidth: '1200px', mb: 2 }}>
+                  <DateRangePicker 
+                    onDateRangeChange={setDateRange}
+                    initialStartDate={dateRange.start}
+                    initialEndDate={dateRange.end}
+                  />
+                </Box>
+                
+                {/* Charts Section */}
+                <Box sx={{ width: '100%', maxWidth: '1200px', mb: 4 }}>
+                  <Grid container spacing={3} justifyContent="center">
+                    <Grid item xs={12} md={10} lg={6}>
+                      <GitHubChart 
+                        title="Commit History" 
+                        type="line"
+                        labels={commitChartData.labels}
+                        datasets={commitChartData.datasets}
+                        subtitle={`${dateRange.start.toLocaleDateString()} - ${dateRange.end.toLocaleDateString()} (Limited to last 90 days)`}
+                        options={{
+                          plugins: {
+                            tooltip: {
+                              callbacks: {
+                                footer: () => {
+                                  return 'GitHub only provides last 90 days of history';
+                                }
+                              }
+                            }
+                          }
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} md={10} lg={6}>
+                      <GitHubChart 
+                        title="Language Distribution" 
+                        type="bar"
+                        labels={languageChartData.labels}
+                        datasets={languageChartData.datasets}
+                        subtitle={`Updated repositories in selected date range`}
+                      />
                     </Grid>
                   </Grid>
+                </Box>
 
-                  {/* Charts Section */}
-                  <Grid xs={12} lg={6}>
-                    <GitHubChart
-                      title="Commit History"
-                      type="line"
-                      labels={commitChartData.labels}
-                      datasets={commitChartData.datasets}
-                    />
-                  </Grid>
-                  <Grid xs={12} lg={6}>
-                    <GitHubChart
-                      title="Language Distribution"
-                      type="bar"
-                      labels={languageChartData.labels}
-                      datasets={languageChartData.datasets}
-                    />
-                  </Grid>
-
-                  {/* Repository Data Grid */}
-                  <Grid xs={12}>
-                    <RepoDataGrid
-                      repositories={repositories}
-                      title="Repositories"
-                    />
-                  </Grid>
-                </Grid>
-              </>
+                {/* Repository Data Grid */}
+                <Box sx={{ width: '100%', maxWidth: '1200px' }}>
+                  <RepoDataGrid 
+                    repositories={repositories} 
+                    title="Repositories"
+                  />
+                </Box>
+              </Box>
             )}
 
             {/* Show empty state if no data and not loading */}
